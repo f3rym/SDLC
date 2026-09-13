@@ -1,0 +1,28 @@
+# ---------- IntelliJ IDEA ----------
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# ---------- Результаты сборки Java ----------
+out/
+build/
+target/
+*.class
+*.jar
+*.war
+*.log
+hs_err_pid*
+
+# ---------- Временные файлы Office (отчёт) ----------
+~$*.docx
+*.tmp
+
+# ---------- Операционная система ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Python (скрипты генерации отчёта и диаграмм) ----------
+__pycache__/
+*.pyc
