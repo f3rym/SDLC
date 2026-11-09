@@ -1,0 +1,26 @@
+@startuml state-reminder
+' Диаграмма состояний «Напоминание в outbox» (ADR-0004), рисунок images/state-reminder.png
+hide empty description
+
+[*] --> Pending : planReminders / INSERT … ON CONFLICT DO NOTHING (BR-14)
+
+Pending --> Deferred : poll [тихие часы и level ≠ CRITICAL]
+Deferred --> Pending : when(конец тихих часов)
+Pending --> Skipped : poll [получатель — контрольное лицо и нет согласия]
+Pending --> Sending : poll [nextAttemptAt ≤ now] / SELECT … SKIP LOCKED
+
+Sending --> Sent : ok / sentAt := now
+Sending --> Retrying : error [attempts < 3] / attempts++
+Retrying --> Pending : after(1 | 5 | 25 мин)
+Sending --> Failed : error [attempts = 3]
+
+state fallback <<choice>>
+Failed --> fallback
+fallback --> [*] : [channel ≠ TELEGRAM или level ≠ CRITICAL]
+fallback --> [*] : [channel = TELEGRAM и level = CRITICAL] / создать напоминание EMAIL (BR-13)
+
+Sent --> [*]
+Skipped --> [*]
+Pending --> Cancelled : deadline.markDone
+Cancelled --> [*]
+@enduml

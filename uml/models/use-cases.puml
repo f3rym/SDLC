@@ -1,0 +1,69 @@
+@startuml use-cases
+' Диаграмма вариантов использования DeadlineGuard 1.0 (рисунок images/use-cases.png)
+' Описания актёров и потоки событий — ../use-case-model.md
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Гость" as Guest
+actor "Студент" as Student
+actor "Староста" as Head
+actor "Таймер" as Timer <<time>>
+actor "Контрольное лицо" as Buddy
+actor "Почтовый сервер\n(SMTP)" as Smtp <<system>>
+actor "Telegram Bot API" as Telegram <<system>>
+
+Head -|> Student
+
+rectangle "DeadlineGuard" {
+  usecase "UC-01 Зарегистрироваться" as UC01
+  usecase "UC-02 Войти в систему" as UC02
+  usecase "UC-03 Создать личный дедлайн\n--\nextension points:\nКонтрольные точки" as UC03
+  usecase "UC-04 Добавить\nконтрольные точки" as UC04
+  usecase "UC-05 Просмотреть календарь" as UC05
+  usecase "UC-06 Отметить прогресс\nи выполнение" as UC06
+  usecase "UC-07 Запросить перенос срока" as UC07
+  usecase "UC-08 Записать изменение\nсрока в историю" as UC08
+  usecase "UC-09 Настроить эскалацию" as UC09
+  usecase "UC-10 Экспортировать\nкалендарь (.ics)" as UC10
+  usecase "UC-11 Создать групповой дедлайн" as UC11
+  usecase "UC-12 Импортировать\nрасписание (.ics)" as UC12
+  usecase "UC-13 Рассмотреть\nзапрос переноса" as UC13
+  usecase "UC-14 Подтвердить согласие" as UC14
+  usecase "UC-15 Пересчитать\nуровни эскалации" as UC15
+  usecase "UC-16 Отправить напоминания\n--\nextension points:\nЭскалация" as UC16
+  usecase "UC-17 Уведомить\nконтрольное лицо" as UC17
+}
+
+Guest --> UC01
+Student --> UC02
+Student --> UC03
+Student --> UC05
+Student --> UC06
+Student --> UC07
+Student --> UC09
+Student --> UC10
+Head --> UC11
+Head --> UC12
+Head --> UC13
+Buddy --> UC14
+Timer --> UC15
+
+UC16 --> Student
+UC17 --> Buddy
+UC01 --> Smtp
+UC16 --> Smtp
+UC16 --> Telegram
+UC17 --> Smtp
+
+UC07 ..> UC08 : <<include>>
+UC13 ..> UC08 : <<include>>
+UC15 ..> UC16 : <<include>>
+UC04 ..> UC03 : <<extend>>
+UC17 ..> UC16 : <<extend>>
+
+note right of UC17
+  condition: уровень «Критично»
+  12 ч без отметки прогресса
+  и согласие контрольного лица (BR-09)
+end note
+@enduml

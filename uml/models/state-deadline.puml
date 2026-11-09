@@ -1,0 +1,39 @@
+@startuml state-deadline
+' Диаграмма состояний «Жизненный цикл дедлайна», рисунок images/state-deadline.png
+' Уточняет автомат SysML v2 из SRS (escalation.sysml): псевдосостояние выбора, история срока, архив.
+hide empty description
+
+[*] --> Active : create / сохранить срок
+
+state Active {
+  state choice <<choice>>
+  [*] --> choice : entry / hoursLeft := target.dueAt − now
+  choice --> Normal : [hoursLeft > 168]
+  choice --> Attention : [72 < hoursLeft ≤ 168]
+  choice --> Urgent : [24 < hoursLeft ≤ 72]
+  choice --> Critical : [0 < hoursLeft ≤ 24]
+
+  Normal : напоминаний нет
+  Attention : do / 1 раз в сутки, в приложении
+  Urgent : do / 2 раза в сутки, + e-mail
+  Critical : entry / напоминание сразу
+  Critical : do / каждые 4 ч, + Telegram
+  Escalated : entry / уведомить контрольное лицо (1 раз)
+
+  Normal --> Attention : tick [hoursLeft ≤ 168]
+  Attention --> Urgent : tick [hoursLeft ≤ 72]
+  Urgent --> Critical : tick [hoursLeft ≤ 24]
+  Critical --> Escalated : tick [hoursSinceProgress ≥ 12 и consent]
+  Escalated --> Critical : markProgress(p)
+}
+
+Active --> Active : postpone(newDue, reason) / записать DueDateChange
+Active --> Overdue : tick [hoursLeft ≤ 0]
+Active --> Done : markDone / doneAt := now
+Overdue --> Done : markDone / сдан с опозданием
+Overdue : do / 1 раз в сутки студенту и контрольному лицу
+Done --> Active : undoDone [now − doneAt ≤ 24 ч]
+Done : entry / отменить запланированные напоминания
+Done --> Archived : after(30 days)
+Archived --> [*]
+@enduml

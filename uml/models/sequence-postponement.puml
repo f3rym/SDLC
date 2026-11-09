@@ -1,0 +1,55 @@
+@startuml sequence-postponement
+' Диаграмма последовательности «Перенос срока» (UC-07, UC-08, UC-13), рисунок images/sequence-postponement.png
+autonumber
+actor "Студент" as S
+participant ":PostponementController" as C <<controller>>
+participant ":PostponementService" as PS <<service>>
+participant ":DeadlineRepository" as R <<repository>>
+participant ":EscalationPolicy" as EP
+participant ":PostponementRequest" as Q <<entity>>
+participant ":NotificationApi" as N <<interface>>
+actor "Староста" as H
+
+S -> C : POST /deadlines/{id}/postponements (newDueAt, reason)
+activate C
+C -> PS : request(id, form, student)
+activate PS
+PS -> R : findById(id)
+R --> PS : deadline
+alt личный дедлайн и postponeCount < 2
+  ref over PS, R : UC-08 Записать изменение срока\n(DueDateChange + новый dueAt, одна транзакция)
+  PS -> EP : levelFor(deadline, checkpoints, now)
+  EP --> PS : level
+  PS --> C : APPLIED
+else личный дедлайн и postponeCount = 2
+  PS --> C : LimitExceededException
+else групповой дедлайн
+  create Q
+  PS -> Q : <<create>> status = PENDING
+  PS ->> N : notify(head, «Новый запрос переноса»)
+  N ->> H : уведомление в приложении
+  PS --> C : PENDING
+end
+deactivate PS
+C --> S : 302 карточка / сообщение
+deactivate C
+
+... староста открывает список запросов ...
+
+H -> C : POST /group/postponements/{rid}/decision (approve)
+activate C
+C -> PS : decide(rid, approve, head)
+activate PS
+PS -> Q : getStatus()
+Q --> PS : PENDING
+opt approve
+  ref over PS, R : UC-08 Записать изменение срока (автор — староста)
+  PS -> EP : levelFor(deadline, checkpoints, now)
+  EP --> PS : level
+end
+PS -> Q : setStatus(APPROVED | REJECTED)
+PS ->> N : notify(student, решение)
+deactivate PS
+C --> H : 302 /group/postponements
+deactivate C
+@enduml

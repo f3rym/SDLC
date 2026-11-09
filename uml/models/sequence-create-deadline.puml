@@ -1,0 +1,54 @@
+@startuml sequence-create-deadline
+' Диаграмма последовательности «Создание дедлайна» (UC-03), рисунок images/sequence-create-deadline.png
+' Участники — элементы модулей web, deadline и escalation (SDD 002-modules)
+autonumber
+actor "Студент" as S
+participant ":DeadlineController" as C <<controller>>
+participant ":DeadlineService" as DS <<service>>
+participant ":EscalationPolicy" as EP
+participant ":Deadline" as D <<entity>>
+participant ":DeadlineRepository" as R <<repository>>
+database "PostgreSQL" as DB
+
+S -> C : POST /deadlines (DeadlineForm)
+activate C
+C -> C : @Valid (BR-02)
+alt есть ошибки валидации
+  C --> S : 422, форма с ошибками у полей
+else данные корректны
+  C -> DS : create(form, owner)
+  activate DS
+  DS -> DS : validateCheckpoints(form) (BR-03)
+  create D
+  DS -> D : <<create>>
+  DS -> EP : levelFor(deadline, checkpoints, now)
+  activate EP
+  EP --> DS : level
+  deactivate EP
+  DS -> D : setLevel(level)
+  DS -> R : save(deadline)
+  activate R
+  R -> DB : INSERT deadline, checkpoint
+  DB --> R : id
+  R --> DS : deadline
+  deactivate R
+  ref over DS, R : Запланировать напоминания (SDD 005, I3)
+  DS --> C : deadline.id
+  deactivate DS
+  C --> S : 302 /deadlines/{id}
+end
+deactivate C
+note over S, C : {≤ 1 с} от отправки формы до карточки (SUP-P2)
+
+== Попытка изменить срок напрямую (BR-01) ==
+S -> C : PUT /deadlines/{id} (dueAt изменён)
+activate C
+C -> DS : update(id, form, owner)
+activate DS
+DS -> R : findById(id)
+R --> DS : deadline
+DS -->x C : DueDateLockedException
+deactivate DS
+C --> S : 409 «Срок изменяется только запросом переноса»
+deactivate C
+@enduml

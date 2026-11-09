@@ -2,13 +2,13 @@
 
 Для DeadlineGuard — веб-приложения «Трекер дедлайнов для студентов»
 
-Версия 0.2
+Версия 0.3
 
 Подготовил Драко М. Д., гр. 450501
 
 БГУИР, факультет КСиС, кафедра ЭВМ
 
-24.10.2026
+09.11.2026
 
 ## Оглавление
 
@@ -33,6 +33,7 @@
 |------|------|--------------------|---------|
 | Драко М. Д. | 21.10.2026 | Первая редакция по SRS 0.2: модули, данные, доставка напоминаний, развёртывание, ADR-0001…0004 | 0.1 |
 | Драко М. Д. | 24.10.2026 | По итогам согласования плана: Telegram через long polling (ADR-0005), контрольные точки (REQ-FUNC-018) в модели данных и алгоритме эскалации, импорт только .ics, сводка группы исключена из 1.0 | 0.2 |
+| Драко М. Д. | 09.11.2026 | Модель динамического поведения на UML (ЛР5): представления 012–015, UML-автомат дедлайна в 007, уточнение условия «Эскалация» в 006, ADR-0006, приложение В | 0.3 |
 
 ---
 
@@ -89,13 +90,16 @@ SDD — руководство для команды разработки (middl
 | ISO/IEC/IEEE 42010:2011 Architecture description | 2011 | iso.org | справочная |
 | OMG SysML v2.0 | 2025 | omg.org/spec/SysML | справочная |
 | Модели SysML v2 дизайна | 0.2 | `sdd/models/*.sysml` | справочная |
+| Модель поведения UML: глоссарий, дополнительные спецификации, прецеденты, диаграммы | 1.0, 09.11.2026 | `uml/` | нормативная |
+| OMG UML 2.5.1 | 2017 | omg.org/spec/UML | справочная |
 
 ### 1.5 Обзор документа {#15-document-overview}
 
 Раздел 2 перечисляет стейкхолдеров и выбранные точки зрения, раздел 3 — проектные представления с
 идентификаторами `NNN-название` и ссылками на требования SRS и ADR, раздел 4 — краткое изложение решений (полные
-записи — в `adr/`), раздел 5 — матрица трассировки «функция плана → представление → требование». Диаграммы
-выполнены на SysML v2: тексты моделей — в `sdd/models`, изображения — в `sdd/images`. Изменения вносятся через
+записи — в `adr/`), раздел 5 — матрица трассировки «функция плана → представление → требование». Структурные
+диаграммы выполнены на SysML v2 (тексты — `sdd/models`, изображения — `sdd/images`), поведенческие — на UML 2.5
+в нотации PlantUML (тексты — `uml/models`, изображения — `uml/images`, ADR-0006). Изменения вносятся через
 pull request и отражаются в «Истории изменений».
 
 ---
@@ -116,12 +120,14 @@ pull request и отражаются в «Истории изменений».
 
 ### 2.2 Выбранные точки зрения {#22-selected-viewpoints}
 
-Язык представлений — SysML v2 (текстовая нотация в `sdd/models`, графическая — PNG), дополнительно таблицы и
-псевдокод.
+Язык структурных представлений — SysML v2 (текстовая нотация в `sdd/models`, графическая — PNG), поведенческих
+(012–015 и UML-автомат в 007) — UML 2.5 в PlantUML (`uml/models`, ADR-0006); дополнительно таблицы и псевдокод.
+Термины модели — `uml/glossary.md`, бизнес-правила `BR-NN` — `uml/supplementary-specification.md`.
 
 #### 2.2.1 Контекст {#221-context}
 
 Используется: представление **001-context**. Система как «чёрный ящик», пользователи и внешние сервисы.
+Функциональный контекст — модель прецедентов **012-use-cases**.
 
 #### 2.2.2 Композиция {#222-composition}
 
@@ -157,16 +163,18 @@ pull request и отражаются в «Истории изменений».
 #### 2.2.9 Взаимодействие {#229-interaction}
 
 Используется: **005-reminder-delivery** — последовательность «пересчёт уровня → outbox → доставка» со «счастливым
-путём» и путями отказа.
+путём» и путями отказа; **013-create-deadline** и **014-postponement** — диаграммы последовательности UML
+создания дедлайна и переноса срока.
 
 #### 2.2.10 Алгоритм {#2210-algorithm}
 
-Используется: **006-escalation-algorithm** — расчёт уровня с учётом контрольных точек и планирование напоминаний.
+Используется: **006-escalation-algorithm** — расчёт уровня с учётом контрольных точек и планирование напоминаний;
+диаграммы активности UML в **013** и **014** — алгоритмы прецедентов UC-03 и UC-07/UC-13.
 
 #### 2.2.11 Динамика состояний {#2211-state-dynamics}
 
-Используется: **007-deadline-states** — автомат `DeadlineState` из SRS (рисунок 10) и его применение к
-контрольным точкам.
+Используется: **007-deadline-states** — UML-автомат жизненного цикла дедлайна (уточняет SysML-автомат SRS,
+рисунок 10) и **015-reminder-states** — автомат напоминания в outbox.
 
 #### 2.2.12 Параллелизм {#2212-concurrency}
 
@@ -309,8 +317,8 @@ pull request и отражаются в «Истории изменений».
       if hoursLeft ≤ 72:  level ← URGENT
       if hoursLeft ≤ 24:  level ← CRITICAL
       if level = CRITICAL and (now − deadline.lastProgressAt) ≥ 12 ч
-         and buddy.consent = GRANTED and эскалация по target ещё не отправлялась:
-                                                 level ← ESCALATED              // REQ-FUNC-007
+         and buddy.consent = GRANTED:
+                                                 level ← ESCALATED              // REQ-FUNC-007, BR-09
       return level
 
   planReminders(deadline, level, now):
@@ -320,6 +328,9 @@ pull request и отражаются в «Истории изменений».
           INSERT reminder … ON CONFLICT DO NOTHING                                              // REQ-REL-002
       при смене уровня — дополнительное напоминание сразу (planned = now)
   ```
+
+  Уровень ESCALATED сохраняется до отметки прогресса (автомат 007); однократность уведомления контрольному лицу
+  обеспечивает уникальный ключ `reminder` (BR-14), а не повторная проверка в `levelFor` — уточнено в версии 0.3.
 
   Сложность — O(N + K) на цикл (N дедлайнов, K точек), обработка пакетами по 500 строк: 10 000 дедлайнов
   укладываются в цикл за секунды (REQ-PERF-002). Граничные значения 168/72/24/0 ч и 12 ч покрываются
@@ -332,14 +343,25 @@ pull request и отражаются в «Истории изменений».
 - **ID:** 007-deadline-states
 - **Title:** Жизненный цикл дедлайна и контрольной точки
 - **Viewpoint:** State Dynamics
-- **Representation:** автомат `state def DeadlineState` — SRS, рисунок 10
-  ([`../srs/images/escalation-states.png`](../srs/images/escalation-states.png)). В версии 1.0 тот же автомат
-  применяется к цели `target` из представления 006: пока есть невыполненная контрольная точка, состояние `active`
-  отражает её срок; отметка точки (`POST …/checkpoints/{cid}/done`) пересчитывает уровень по следующей точке или по
-  сроку дедлайна. Просроченная точка переводит в `overdue` только её напоминания: дедлайн остаётся активным до
-  своего срока. Состояние хранится в `deadline.level` и обновляется планировщиком и действиями пользователя.
-- **More Information:** модель [`../srs/models/escalation.sysml`](../srs/models/escalation.sysml); REQ-FUNC-005,
-  REQ-FUNC-018.
+- **Representation:** ![Жизненный цикл дедлайна](../uml/images/state-deadline.png)
+
+  *Рисунок 4 — UML-автомат `stm Deadline`. Модель: [`../uml/models/state-deadline.puml`](../uml/models/state-deadline.puml)*
+
+  Составное состояние `Active` содержит уровни Normal, Attention, Urgent, Critical и Escalated. Вход в `Active`
+  проходит через псевдосостояние выбора: уровень определяется по `hoursLeft` до цели эскалации (BR-08), поэтому
+  создание, отмена отметки «Выполнен» (`undoDone`, BR-10) и перенос срока (`postpone` — самопереход составного
+  состояния, UC-07) всегда дают уровень, соответствующий оставшемуся времени. Внутри `Active` переходы
+  выполняются по сигналу таймера `tick` (UC-15, раз в 5 минут); `Critical → Escalated` — при 12 ч без отметки и
+  согласии контрольного лица (BR-09), `Escalated → Critical` — по `markProgress`. Выход из `Active`: `markDone` →
+  `Done`, истечение срока → `Overdue`; `Done` через 30 дней → `Archived` (BR-11).
+
+  В версии 1.0 автомат применяется к цели `target` из представления 006: пока есть невыполненная контрольная
+  точка, состояние `Active` отражает её срок; отметка точки (`POST …/checkpoints/{cid}/done`) пересчитывает уровень
+  по следующей точке или по сроку дедлайна. Просроченная точка переводит в `Overdue` только её напоминания:
+  дедлайн остаётся активным до своего срока. Состояние хранится в `deadline.level` и обновляется планировщиком и
+  действиями пользователя.
+- **More Information:** SysML-модель SRS [`../srs/models/escalation.sysml`](../srs/models/escalation.sysml);
+  REQ-FUNC-005, 007, 008, 018; ADR-0006.
 
 ### 008-concurrency
 
@@ -367,7 +389,7 @@ pull request и отражаются в «Истории изменений».
 - **Viewpoint:** Deployment, Physical
 - **Representation:** ![Развёртывание](images/deployment.png)
 
-  *Рисунок 4 — `part deployment`. Модель: [`models/architecture.sysml`](models/architecture.sysml)*
+  *Рисунок 5 — `part deployment`. Модель: [`models/architecture.sysml`](models/architecture.sysml)*
 
   Docker Compose на одной VPS: `proxy` (Caddy, HTTPS :443, Let's Encrypt), `app` (eclipse-temurin:21-jre,
   `deadlineguard.jar`), `db` (postgres:16, том `pgdata`), `backup` (cron + `pg_dump`). Секреты — в `.env`
@@ -411,6 +433,88 @@ pull request и отражаются в «Истории изменений».
   | Чистая функция + внедрение `Clock` | `escalation` | детерминированные тесты границ уровней |
 - **More Information:** REQ-MAINT-001, раздел 3.5.5 SRS (модуль эскалации как независимая библиотека).
 
+### 012-use-cases
+
+- **ID:** 012-use-cases
+- **Title:** Модель вариантов использования
+- **Viewpoint:** Context (функциональный)
+- **Representation:** ![Варианты использования](../uml/images/use-cases.png)
+
+  *Рисунок 6 — `uc DeadlineGuard 1.0`. Модель: [`../uml/models/use-cases.puml`](../uml/models/use-cases.puml),
+  описания актёров и потоки событий — [`../uml/use-case-model.md`](../uml/use-case-model.md)*
+
+  Актёры: Гость, Студент, Староста (обобщение Студента), Контрольное лицо, Таймер (время) и вспомогательные
+  системы SMTP и Telegram Bot API; 17 прецедентов объёма версии 1.0. Связи: «include» UC-07 и UC-13 → UC-08
+  «Записать изменение срока», UC-15 → UC-16; «extend» UC-04 → UC-03 (точка «Контрольные точки»), UC-17 → UC-16
+  (точка «Эскалация», условие BR-09).
+- **More Information:** уточняет рисунок 2 SRS под объём 1.0 (без сводки группы, с контрольными точками);
+  глоссарий — `uml/glossary.md`; ADR-0006.
+
+### 013-create-deadline
+
+- **ID:** 013-create-deadline
+- **Title:** Создание дедлайна и запрет прямой смены срока
+- **Viewpoint:** Algorithm, Interaction
+- **Representation:** ![Активность создания дедлайна](../uml/images/activity-create-deadline.png)
+
+  *Рисунок 7 — `act` «Создание личного дедлайна». Модель:
+  [`../uml/models/activity-create-deadline.puml`](../uml/models/activity-create-deadline.puml)*
+
+  ![Последовательность создания дедлайна](../uml/images/sequence-create-deadline.png)
+
+  *Рисунок 8 — `sd create_deadline`. Модель:
+  [`../uml/models/sequence-create-deadline.puml`](../uml/models/sequence-create-deadline.puml)*
+
+  Активность повторяет поток событий UC-03/UC-04: дорожки «Студент» и «Система», цикл добавления до 5
+  контрольных точек, возврат к форме при ошибках (BR-02, BR-03), параллельные сохранение и расчёт начального
+  уровня (fork/join). Последовательность показывает те же шаги на уровне модулей: `DeadlineController` (web) →
+  `DeadlineService` (deadline) → `EscalationPolicy.levelFor` (escalation) → `DeadlineRepository`; ошибки
+  проверки — 422, планирование напоминаний — фрагмент `ref` (005, итерация I3), ограничение длительности
+  `{≤ 1 с}` (SUP-P2). Второй сценарий — `PUT /deadlines/{id}` с изменённым сроком: `DueDateLockedException` →
+  HTTP 409 (BR-01).
+- **More Information:** REQ-FUNC-002, 004, 018; маршруты — 004-interface; ADR-0001, ADR-0002.
+
+### 014-postponement
+
+- **ID:** 014-postponement
+- **Title:** Перенос срока личного и группового дедлайна
+- **Viewpoint:** Algorithm, Interaction
+- **Representation:** ![Активность переноса срока](../uml/images/activity-postponement.png)
+
+  *Рисунок 9 — `act` «Перенос срока дедлайна». Модель:
+  [`../uml/models/activity-postponement.puml`](../uml/models/activity-postponement.puml)*
+
+  ![Последовательность переноса срока](../uml/images/sequence-postponement.png)
+
+  *Рисунок 10 — `sd request_postponement`. Модель:
+  [`../uml/models/sequence-postponement.puml`](../uml/models/sequence-postponement.puml)*
+
+  Три дорожки: Студент, Система, Староста. Проверка причины (BR-04) возвращает к вводу; личный дедлайн
+  переносится сразу при `postponeCount < 2` (BR-05) с записью в историю (UC-08, BR-07) и пересчётом уровня,
+  иначе — отказ; групповой создаёт `PostponementRequest` со статусом PENDING и сигнал старосте, решение
+  которого принимается асинхронно (BR-06). На последовательности ветки — фрагмент `alt`, решение старосты —
+  второй сеанс `POST /group/postponements/{rid}/decision` с фрагментом `opt [approve]`; уведомления —
+  асинхронные сообщения `NotificationApi`.
+- **More Information:** REQ-FUNC-009, 011; модель данных — 003 (`postponement_request`, `due_date_change`);
+  ADR-0006.
+
+### 015-reminder-states
+
+- **ID:** 015-reminder-states
+- **Title:** Жизненный цикл напоминания в outbox
+- **Viewpoint:** State Dynamics
+- **Representation:** ![Состояния напоминания](../uml/images/state-reminder.png)
+
+  *Рисунок 11 — `stm Reminder`. Модель: [`../uml/models/state-reminder.puml`](../uml/models/state-reminder.puml)*
+
+  Напоминание создаётся в Pending вставкой с `ON CONFLICT DO NOTHING` (BR-14); в тихие часы ниже уровня
+  «Критично» уходит в Deferred (BR-12); без согласия контрольного лица — Skipped; при выполнении дедлайна —
+  Cancelled. Обработчик outbox переводит его в Sending, затем в Sent или, при ошибке, в Retrying с паузой
+  1/5/25 мин; после третьей неудачи — Failed, а критичное напоминание Telegram порождает напоминание по e-mail
+  (BR-13). Хранимые значения `reminder.status` — PENDING, SENT, FAILED, SKIPPED; остальные состояния
+  вычисляются.
+- **More Information:** REQ-FUNC-006, 015; REQ-REL-001…003; уточняет 005 и 008; ADR-0004.
+
 ---
 
 ## 4. Решения {#4-decisions}
@@ -452,6 +556,14 @@ pull request и отражаются в «Истории изменений».
 - **Outcome:** «long polling», потому что экономит 4 ч и не требует публичного адреса.
 - **More Information:** [`../adr/0005-telegram-long-polling.md`](../adr/0005-telegram-long-polling.md); 004, 009.
 
+- **ID:** 0006-uml-behaviour-models-plantuml
+- **Title:** Модель поведения на UML 2.5 в PlantUML и правила связи диаграмм
+- **Context:** нужна модель динамического поведения, хранимая в Git вместе с SRS/SDD и трассируемая к требованиям.
+- **Options:** UML 2.5 в PlantUML; SysML v2 для поведения; draw.io / StarUML; Mermaid.
+- **Outcome:** «UML в PlantUML», потому что даёт стандартные поведенческие диаграммы в текстовом виде для ревью; диаграммы
+  строятся по цепочке глоссарий → прецеденты → активность → состояния → последовательность.
+- **More Information:** [`../adr/0006-uml-behaviour-models-plantuml.md`](../adr/0006-uml-behaviour-models-plantuml.md); 007, 012–015.
+
 ---
 
 ## 5. Приложения {#5-appendixes}
@@ -488,4 +600,19 @@ pull request и отражаются в «Истории изменений».
 | [images/components.png](images/components.png) | рисунок 1 — модули |
 | [images/data-model.png](images/data-model.png) | рисунок 2 — модель данных |
 | [images/reminder-delivery.png](images/reminder-delivery.png) | рисунок 3 — доставка напоминания |
-| [images/deployment.png](images/deployment.png) | рисунок 4 — развёртывание |
+| [images/deployment.png](images/deployment.png) | рисунок 5 — развёртывание |
+
+**Приложение В. Модель поведения UML (ЛР5)**
+
+| Файл | Содержание | Прецеденты | Представление |
+|------|------------|------------|---------------|
+| [../uml/glossary.md](../uml/glossary.md) | глоссарий проекта: 32 термина предметной области и 18 технических | все | 2.2 |
+| [../uml/supplementary-specification.md](../uml/supplementary-specification.md) | бизнес-правила BR-01…BR-16, требования FURPS+ | все | 2.2 |
+| [../uml/use-case-model.md](../uml/use-case-model.md) | актёры, связи, потоки событий UC-01…UC-17 | все | 012 |
+| [../uml/models/use-cases.puml](../uml/models/use-cases.puml) | диаграмма прецедентов | все | 012 |
+| [../uml/models/activity-create-deadline.puml](../uml/models/activity-create-deadline.puml) | активность «Создание личного дедлайна» | UC-03, UC-04 | 013 |
+| [../uml/models/sequence-create-deadline.puml](../uml/models/sequence-create-deadline.puml) | последовательность `create_deadline` | UC-03 | 013 |
+| [../uml/models/activity-postponement.puml](../uml/models/activity-postponement.puml) | активность «Перенос срока» | UC-07, UC-08, UC-13 | 014 |
+| [../uml/models/sequence-postponement.puml](../uml/models/sequence-postponement.puml) | последовательность `request_postponement` | UC-07, UC-08, UC-13 | 014 |
+| [../uml/models/state-deadline.puml](../uml/models/state-deadline.puml) | автомат жизненного цикла дедлайна | UC-03, UC-06, UC-07, UC-15 | 007 |
+| [../uml/models/state-reminder.puml](../uml/models/state-reminder.puml) | автомат напоминания в outbox | UC-16, UC-17 | 015 |
